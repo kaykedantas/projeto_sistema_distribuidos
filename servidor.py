@@ -1,10 +1,10 @@
 import socket
 
-HOST = '10.62.206.45' # Endereço IP local (localhost)
+HOST = '10.62.206.46' # Endereço IP local (localhost)
 PORT = 8000        # Porta específica exigida no requisito
 
 #  Criação do Socket: IPv4 (AF_INET) e TCP (SOCK_STREAM)
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s: #AF_INET é o que define que o protocolo será ipv4
     # Vínculo (Bind): Associa o socket ao IP e porta
     s.bind((HOST, PORT))
     
