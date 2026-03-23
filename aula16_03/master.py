@@ -4,7 +4,7 @@ import json
 HOST = '10.62.206.46'
 PORT = 8000
 J2={
-    "SERVER_UUID": "...",
+    "SERVER_UUID": "Master_A",
     "TASK": "HEARTBEAT",
     "RESPONSE": "ALIVE"
 }

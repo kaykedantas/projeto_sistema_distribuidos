@@ -5,7 +5,7 @@ HOST = '10.62.206.46'
 PORT = 8000
 
 J= {
-"SERVER_UUID": "...",
+"SERVER_UUID": "Master_A",
 "TASK": "HEARTBEAT"
 }
 MENSAGEM = f" ola {HOST} /n {json.dumps(J)}"
