@@ -1,7 +1,7 @@
 import socket
 import time 
 import threading 
-host = '10.62.206.4' # Endereço IP local (localhost)
+host = '10.62.206.45' # Endereço IP local (localhost)
 PORT = 8000        # Porta específica exigida no requisito
 
 last_heatbeat = time.time()
@@ -31,7 +31,20 @@ def handle_clientt(conn):
 def start_master():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host, PORT))
+    server.listen()
     
+    print("Master aguardando conexão...")
+    conn, addr = server.accept()
+
+    print("Worker conectado:", addr)
+
+    threading.Thread(target=monitor).start()
+    handle_clientt(conn) 
+
+
+
+
+start_master()
 
 
 
