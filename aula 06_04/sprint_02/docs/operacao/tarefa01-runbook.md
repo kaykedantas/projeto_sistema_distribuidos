@@ -17,7 +17,13 @@ python -c "from src.discovery.master_discovery import MasterResponder; m=MasterR
 - Em outro terminal, executar a descoberta do Worker (mostra respostas):
 
 ```bash
-python -c "from src.discovery.worker_discovery import discover_masters; print(discover_masters(timeout_ms=3000))"
+python -c "from src.discovery.worker_discovery import discover_masters, perform_discovery_and_election; print(discover_masters(timeout_ms=3000))"
+```
+
+- Para executar descoberta seguida de eleição (TCP handshake):
+
+```bash
+python -c "from src.discovery.worker_discovery import perform_discovery_and_election; print(perform_discovery_and_election(timeout_ms=3000))"
 ```
 
 Critérios de sucesso
@@ -29,3 +35,5 @@ Rollback
 Notas
 - Se multicast não funcionar na rede local, use `DISCOVERY_MODE=broadcast` ao executar `discover_masters`.
 - Testes automatizados são fornecidos em `tests/` — execute `pytest` para validar.
+ - Testes automatizados são fornecidos em `tests/` — execute `pytest` para validar.
+ - O Master responder agora abre um servidor TCP (padrão `50010`) usado para o handshake de eleição. Configure `tcp_port` ao iniciar `MasterResponder` para testes locais alternativos.
