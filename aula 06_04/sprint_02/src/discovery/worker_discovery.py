@@ -79,3 +79,85 @@ def discover_masters(timeout_ms=3000, group='239.255.0.1', port=50000, mode='mul
     except Exception:
         pass
     return responses
+
+
+def _get_field(obj, *keys):
+    for k in keys:
+        if k in obj:
+            return obj[k]
+    return None
+
+
+def elect_master(responses, worker_uuid=None, tcp_timeout=2.0):
+    """
+    Determine selected master by deterministic lexicographic rule and perform TCP election handshake.
+    Returns dict with selected master info on success, or None on failure.
+    """
+    if not responses:
+        return None
+    # Extract candidate names with original response
+    candidates = []
+    for r in responses:
+        name = _get_field(r, 'MASTER_NAME', 'master_name', 'hostname', 'master_id')
+        if name is None:
+            # fallback to master_id or hostname
+            name = _get_field(r, 'master_id', 'hostname')
+        if name is None:
+            continue
+        candidates.append((str(name), r))
+
+    if not candidates:
+        return None
+
+    # Deterministic lexicographic selection (ascending)
+    candidates.sort(key=lambda x: x[0])
+    selected_name, selected_resp = candidates[0]
+
+    # Determine IP and TCP port to connect
+    ip = _get_field(selected_resp, 'ip') or (selected_resp.get('_from')[0] if selected_resp.get('_from') else None)
+    port = _get_field(selected_resp, 'MASTER_PORT') or _get_field(selected_resp, 'master_port') or _get_field(selected_resp, 'master_port')
+    try:
+        port = int(port)
+    except Exception:
+        port = None
+
+    if not ip or not port:
+        return None
+
+    # TCP handshake: send ELECTION and expect ELECTION_ACK
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(tcp_timeout)
+        s.connect((ip, port))
+        payload = {
+            'TYPE': 'ELECTION',
+            'WORKER_UUID': worker_uuid or str(uuid.uuid4()),
+            'SELECTED_MASTER': selected_name
+        }
+        s.sendall((json.dumps(payload) + '\n').encode('utf-8'))
+        # read response until newline
+        f = s.makefile('rb')
+        line = f.readline()
+        if not line:
+            s.close()
+            return None
+        try:
+            resp = json.loads(line.decode('utf-8').strip())
+        except Exception:
+            s.close()
+            return None
+        resp_type = _get_field(resp, 'TYPE', 'type')
+        status = _get_field(resp, 'STATUS', 'status')
+        if resp_type and str(resp_type).upper() == 'ELECTION_ACK' and str(status).upper() == 'ACCEPTED':
+            s.close()
+            result = {'selected_name': selected_name, 'selected_response': selected_resp, 'master_ip': ip, 'master_port': port}
+            return result
+    except Exception:
+        return None
+    return None
+
+
+def perform_discovery_and_election(timeout_ms=3000, group='239.255.0.1', port=50000, mode='multicast', worker_uuid=None):
+    responses = discover_masters(timeout_ms=timeout_ms, group=group, port=port, mode=mode)
+    election = elect_master(responses, worker_uuid=worker_uuid)
+    return election
