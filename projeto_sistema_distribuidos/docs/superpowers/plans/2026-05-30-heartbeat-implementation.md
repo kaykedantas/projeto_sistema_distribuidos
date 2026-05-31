@@ -1,5 +1,13 @@
 # Heartbeat Mechanism Implementation Plan
 
+> **STATUS DE EXECUÇÃO (2026-05-30): ✅ EXECUTADO.** Todas as tarefas (1–4) foram
+> implementadas em `src/heartbeat/` com entry points em `master.py`/`worker.py`.
+> Testes: **7/7 passando** (4 de unidade + 3 de integração). Demo end-to-end
+> validada com processos reais (HEARTBEAT → ALIVE). Ver `README_SPRINT01.md`.
+> Observação: o ambiente original não tinha rede; os testes foram verificados
+> pelo runner `run_tests.py` (equivalente, sem dependências) — na sua máquina
+> use `pytest -q` após `pip install -r requirements.txt`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the Worker→Master HEARTBEAT mechanism (JSON over TCP with `\n` delimiter), Worker heartbeat interval 10s and Master response timeout 5s.

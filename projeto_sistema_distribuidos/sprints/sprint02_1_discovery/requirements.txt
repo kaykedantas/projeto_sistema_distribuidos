@@ -1,0 +1,4 @@
+# Dependências de teste da Sprint 01 (Heartbeat).
+# O código de produção usa apenas a biblioteca padrão (asyncio, json, logging).
+pytest>=7.0
+pytest-asyncio>=0.21
