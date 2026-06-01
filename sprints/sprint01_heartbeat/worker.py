@@ -8,7 +8,7 @@ ALIVE. A lógica vive em ``src/heartbeat/worker_async.py``; este arquivo apenas
 ajusta o ``sys.path`` e delega para o ``main()`` do módulo.
 
 Uso:
-    python worker.py --host 127.0.0.1 --port 8000 --master Master_A
+    python worker.py --host 127.0.0.1 --port 10000 --master MASTER_KAYKE
 """
 
 import os

@@ -9,8 +9,8 @@ operações — atendendo ao requisito de concorrência do backlog (Tarefa 04) e
 preparando o terreno para as Sprints 02/03, em que o Master fala com vários
 Workers e Masters ao mesmo tempo.
 
-Payload de entrada  (Worker -> Master):  {"SERVER_UUID": "Master_A", "TASK": "HEARTBEAT"}
-Payload de resposta (Master -> Worker):  {"SERVER_UUID": "Master_A", "TASK": "HEARTBEAT", "RESPONSE": "ALIVE"}
+Payload de entrada  (Worker -> Master):  {"SERVER_UUID": "MASTER_KAYKE", "TASK": "HEARTBEAT"}
+Payload de resposta (Master -> Worker):  {"SERVER_UUID": "MASTER_KAYKE", "TASK": "HEARTBEAT", "RESPONSE": "ALIVE"}
 """
 
 import asyncio
@@ -33,7 +33,7 @@ class Master:
         respostas).
     """
 
-    def __init__(self, host: str, port: int, master_id: str = "Master_A"):
+    def __init__(self, host: str, port: int, master_id: str = "MASTER_KAYKE"):
         self.host = host
         self.port = port
         self.master_id = master_id
@@ -92,7 +92,7 @@ class Master:
             await self._server.serve_forever()
 
 
-async def run_server(host: str, port: int, master_id: str = "Master_A") -> None:
+async def run_server(host: str, port: int, master_id: str = "MASTER_KAYKE") -> None:
     """Atalho funcional usado pelos testes de integração."""
     await Master(host, port, master_id).start()
 
@@ -102,8 +102,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Master (servidor de Heartbeat)")
     parser.add_argument("--host", default="0.0.0.0", help="IP de escuta")
-    parser.add_argument("--port", type=int, default=8000, help="Porta de escuta")
-    parser.add_argument("--id", default="Master_A", help="master_id (SERVER_UUID)")
+    parser.add_argument("--port", type=int, default=10000, help="Porta de escuta")
+    parser.add_argument("--id", default="MASTER_KAYKE", help="master_id (SERVER_UUID)")
     args = parser.parse_args()
 
     logging.basicConfig(

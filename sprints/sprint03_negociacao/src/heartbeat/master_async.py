@@ -61,7 +61,7 @@ class Master:
         ``QUERY``). Alimenta a fila do Master.
     """
 
-    def __init__(self, host: str, port: int, master_id: str = "Master_A",
+    def __init__(self, host: str, port: int, master_id: str = "MASTER_KAYKE",
                  tasks: Optional[Iterable[str]] = None,
                  name: Optional[str] = None,
                  advertise_ip: Optional[str] = None,
@@ -468,7 +468,7 @@ class Master:
             await self._server.serve_forever()
 
 
-async def run_server(host: str, port: int, master_id: str = "Master_A",
+async def run_server(host: str, port: int, master_id: str = "MASTER_KAYKE",
                      tasks: Optional[Iterable[str]] = None,
                      name: Optional[str] = None,
                      advertise_ip: Optional[str] = None,
@@ -505,13 +505,13 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Master (negociação + descoberta + tarefas + heartbeat)")
     parser.add_argument("--host", default="0.0.0.0", help="IP de escuta TCP")
-    parser.add_argument("--port", type=int, default=8000, help="Porta TCP")
-    parser.add_argument("--id", default="Master_A", help="master_id (SERVER_UUID)")
+    parser.add_argument("--port", type=int, default=10000, help="Porta TCP")
+    parser.add_argument("--id", default="MASTER_KAYKE", help="master_id (SERVER_UUID)")
     parser.add_argument("--name", default=None,
                         help="MASTER_NAME para descoberta/eleição (ex.: MASTER_1)")
     parser.add_argument("--advertise-ip", default=None,
                         help="IP anunciado nas DISCOVERY_REPLY (auto-detecta se omitido)")
-    parser.add_argument("--disc-port", type=int, default=5000,
+    parser.add_argument("--disc-port", type=int, default=10000,
                         help="Porta UDP de descoberta (0 desativa)")
     parser.add_argument("--tasks", default="Michel,Julia",
                         help="Lista inicial de tarefas (USERs) separada por vírgula")

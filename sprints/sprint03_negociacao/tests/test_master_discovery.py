@@ -8,7 +8,7 @@ from src.heartbeat import master_async, messaging, discovery
 
 def test_master_responde_discovery_reply():
     async def cenario():
-        m = master_async.Master("127.0.0.1", 8000, master_id="MASTER_1",
+        m = master_async.Master("127.0.0.1", 10000, master_id="MASTER_1",
                                  name="MASTER_1", advertise_ip="127.0.0.1")
         await m.start_discovery(disc_port=0)  # porta UDP efêmera
         port = m.disc_transport.get_extra_info("sockname")[1]
@@ -21,7 +21,7 @@ def test_master_responde_discovery_reply():
 
     achados = asyncio.run(cenario())
     assert achados and achados[0]["MASTER_NAME"] == "MASTER_1"
-    assert achados[0]["MASTER_PORT"] == 8000
+    assert achados[0]["MASTER_PORT"] == 10000
     assert achados[0]["STATUS"] == "AVAILABLE"
 
 

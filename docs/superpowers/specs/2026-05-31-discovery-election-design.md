@@ -48,7 +48,7 @@ que antecede o handshake TCP e alimenta esses ciclos já existentes.
 Obrigatórios: `TYPE`, `MASTER_NAME`, `MASTER_IP`, `MASTER_PORT`. (`STATUS:"AVAILABLE"`
 aparece no fluxo de comunicação do PDF e é incluído.)
 ```json
-{ "TYPE": "DISCOVERY_REPLY", "MASTER_NAME": "MASTER_1", "MASTER_IP": "192.168.1.20", "MASTER_PORT": 8000, "STATUS": "AVAILABLE" }
+{ "TYPE": "DISCOVERY_REPLY", "MASTER_NAME": "MASTER_1", "MASTER_IP": "192.168.1.20", "MASTER_PORT": 10000, "STATUS": "AVAILABLE" }
 ```
 
 **3. Confirmação de Eleição (Worker → Master, TCP)**

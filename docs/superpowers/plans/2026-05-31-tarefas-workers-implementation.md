@@ -110,7 +110,7 @@ from src.heartbeat import master_async
 from src.heartbeat import messaging
 
 async def _abre(port, tasks):
-    m = master_async.Master("127.0.0.1", port, master_id="Master_A", tasks=tasks)
+    m = master_async.Master("127.0.0.1", port, master_id="MASTER_KAYKE", tasks=tasks)
     server = asyncio.create_task(m.start())
     await asyncio.sleep(0.15)
     return m, server
@@ -153,7 +153,7 @@ Modificar `Master.__init__` para aceitar `tasks` e criar registro:
 ```python
 from collections import deque
 
-def __init__(self, host, port, master_id="Master_A", tasks=None):
+def __init__(self, host, port, master_id="MASTER_KAYKE", tasks=None):
     self.host = host
     self.port = port
     self.master_id = master_id

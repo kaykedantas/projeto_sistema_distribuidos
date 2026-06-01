@@ -64,14 +64,14 @@
  |1.1| Worker A1 → Master A - Worker A1 pergunta ao Servidor B se ele está ativo. 
  PAYLOAD: 
  { 
- "SERVER_UUID"  :  "Master_A", 
+ "SERVER_UUID"  :  "MASTER_KAYKE", 
  "TASK"  :  "HEARTBEAT" 
  } 
 
  |1.2| Master A →  Worker A1 - Servidor B responde que está ativo. 
  PAYLOAD: 
  { 
- "SERVER_UUID"  :  "Master_A", 
+ "SERVER_UUID"  :  "MASTER_KAYKE", 
  "TASK"  :  "HEARTBEAT", 
  "RESPONSE"  :  "ALIVE" 
  } 

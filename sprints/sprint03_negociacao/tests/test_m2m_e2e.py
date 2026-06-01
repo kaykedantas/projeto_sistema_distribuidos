@@ -26,7 +26,7 @@ def test_e2e_emprestimo_tarefa_e_devolucao():
     A entrega QUERY -> OK -> ACK -> A normaliza -> devolução (notify a B)."""
     async def cenario():
         b, sb, pb = await _sobe("MASTER_B", ociosos=2)
-        a, sa, pa = await _sobe("MASTER_A", tasks=["Michel"])
+        a, sa, pa = await _sobe("MASTER_KAYKE", tasks=["Michel"])
         a.neighbors["MASTER_B"] = ("127.0.0.1", pb)
 
         # 1) A satura e pede ajuda a B

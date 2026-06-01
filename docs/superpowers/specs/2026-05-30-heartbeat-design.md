@@ -18,7 +18,7 @@ Payloads oficiais (exatos do PDF)
 
 ```json
 {
-  "SERVER_UUID": "Master_A",
+  "SERVER_UUID": "MASTER_KAYKE",
   "TASK": "HEARTBEAT"
 }
 ```
@@ -27,7 +27,7 @@ Payloads oficiais (exatos do PDF)
 
 ```json
 {
-  "SERVER_UUID": "Master_A",
+  "SERVER_UUID": "MASTER_KAYKE",
   "TASK": "HEARTBEAT",
   "RESPONSE": "ALIVE"
 }

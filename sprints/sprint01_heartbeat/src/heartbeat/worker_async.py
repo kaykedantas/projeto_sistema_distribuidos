@@ -89,8 +89,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Worker (cliente de Heartbeat)")
     parser.add_argument("--host", default="127.0.0.1", help="IP do Master")
-    parser.add_argument("--port", type=int, default=8000, help="Porta do Master")
-    parser.add_argument("--master", default="Master_A",
+    parser.add_argument("--port", type=int, default=10000, help="Porta do Master")
+    parser.add_argument("--master", default="MASTER_KAYKE",
                         help="SERVER_UUID do Master alvo")
     parser.add_argument("--interval", type=float, default=HEARTBEAT_INTERVAL,
                         help="Intervalo entre heartbeats (s)")

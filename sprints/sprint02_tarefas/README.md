@@ -45,19 +45,19 @@ obrigatório), valores de controle em CAIXA ALTA, timeout de 5s no Worker.
 Master (servidor), semeando a fila de tarefas:
 
 ```bash
-python master.py --host 0.0.0.0 --port 8000 --tasks Michel,Julia
+python master.py --host 0.0.0.0 --port 10000 --tasks Michel,Julia
 ```
 
 Worker local:
 
 ```bash
-python worker.py --host 127.0.0.1 --port 8000 --uuid W-123
+python worker.py --host 127.0.0.1 --port 10000 --uuid W-123
 ```
 
 Worker emprestado (de outro Master):
 
 ```bash
-python worker.py --host 127.0.0.1 --port 8000 --uuid W-999 --origin-master Master-B
+python worker.py --host 127.0.0.1 --port 10000 --uuid W-999 --origin-master Master-B
 ```
 
 Demo automática (Master + ciclos QUERY→STATUS→ACK e NO_TASK):

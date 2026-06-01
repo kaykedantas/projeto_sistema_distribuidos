@@ -170,13 +170,13 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Worker (cliente de tarefas/heartbeat)")
     parser.add_argument("--host", default="127.0.0.1", help="IP do Master")
-    parser.add_argument("--port", type=int, default=8000, help="Porta do Master")
+    parser.add_argument("--port", type=int, default=10000, help="Porta do Master")
     parser.add_argument("--uuid", default="W-123", help="WORKER_UUID deste Worker")
     parser.add_argument("--origin-master", default=None,
                         help="SERVER_UUID do Master de origem (marca worker emprestado)")
     parser.add_argument("--mode", choices=["tasks", "heartbeat"], default="tasks",
                         help="tasks = ciclo de tarefas (Sprint 02); heartbeat = Sprint 01")
-    parser.add_argument("--master", default="Master_A",
+    parser.add_argument("--master", default="MASTER_KAYKE",
                         help="(modo heartbeat) SERVER_UUID do Master alvo")
     args = parser.parse_args()
 

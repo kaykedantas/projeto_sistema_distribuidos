@@ -12,7 +12,7 @@ from src.heartbeat import master_async, messaging, worker_async
 
 async def _abre(port, tasks):
     """Sobe um Master em ``port`` com a fila ``tasks`` e retorna (master, task)."""
-    m = master_async.Master("127.0.0.1", port, master_id="Master_A", tasks=tasks)
+    m = master_async.Master("127.0.0.1", port, master_id="MASTER_KAYKE", tasks=tasks)
     server = asyncio.create_task(m.start())
     await asyncio.sleep(0.15)  # deixa o servidor bindar
     return m, server

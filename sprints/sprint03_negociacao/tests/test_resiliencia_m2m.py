@@ -49,13 +49,13 @@ def test_ct08_worker_emprestado_detecta_queda_do_receptor():
     from src.heartbeat import worker_async
 
     async def cenario():
-        a, sa, pa = await _sobe("MASTER_A")
+        a, sa, pa = await _sobe("MASTER_KAYKE")
         # worker emprestado faz um ciclo com sucesso
         await worker_async.register_as_temporary("127.0.0.1", pa, "B1", "127.0.0.1:9000")
         # A cai:
         await _fecha(sa)
         # próxima operação do worker contra A falha (detecção da queda)
-        ok = await worker_async.run_once("127.0.0.1", pa, "MASTER_A", timeout=1.0)
+        ok = await worker_async.run_once("127.0.0.1", pa, "MASTER_KAYKE", timeout=1.0)
         return ok
 
     assert asyncio.run(cenario()) is False

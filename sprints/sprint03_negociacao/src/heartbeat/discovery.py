@@ -23,7 +23,7 @@ from src.heartbeat import messaging
 logger = logging.getLogger("discovery")
 
 # Parâmetros padrão (Notas de Implementação do PDF).
-DISC_PORT = 5000
+DISC_PORT = 10000
 MULTICAST_GROUP = "239.255.255.250"
 BROADCAST_ADDR = "255.255.255.255"
 COLLECT_WINDOW = 3.0  # janela fixa de coleta após o DISCOVERY

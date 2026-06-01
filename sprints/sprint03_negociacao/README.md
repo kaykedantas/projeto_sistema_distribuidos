@@ -70,7 +70,7 @@ devolucao quando `n < release_threshold` (default 60). A zona morta entre 60 e
 python master.py --id MASTER_B --name MASTER_B --port 8001 --disc-port 0
 
 # Terminal 2 — Master A (pede ajuda), conhece B como vizinho
-python master.py --id MASTER_A --name MASTER_A --port 8000 --disc-port 5000 \
+python master.py --id MASTER_KAYKE --name MASTER_KAYKE --port 10000 --disc-port 5000 \
   --neighbors MASTER_B@127.0.0.1:8001 --capacity 100 --release-threshold 60
 
 # Terminal 3 — Worker (descobre A pela Sprint 2.1 e opera)

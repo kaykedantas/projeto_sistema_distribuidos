@@ -21,7 +21,7 @@ async def _fecha(server):
 
 def test_ct04_registro_worker_emprestado():
     async def cenario():
-        a, sa, pa = await _sobe("MASTER_A")
+        a, sa, pa = await _sobe("MASTER_KAYKE")
         ok = await worker_async.register_as_temporary(
             "127.0.0.1", pa, "B1", "127.0.0.1:9000")
         await asyncio.sleep(0.1)  # deixa o Master processar
@@ -37,7 +37,7 @@ def test_ct04_registro_worker_emprestado():
 def test_ct05_tarefa_em_worker_emprestado():
     """O emprestado opera pelo ciclo da Sprint 02 com SERVER_UUID = Master origem."""
     async def cenario():
-        a, sa, pa = await _sobe("MASTER_A", tasks=["Michel"])
+        a, sa, pa = await _sobe("MASTER_KAYKE", tasks=["Michel"])
         # registra como emprestado
         await worker_async.register_as_temporary("127.0.0.1", pa, "B1", "127.0.0.1:9000")
         await asyncio.sleep(0.05)
