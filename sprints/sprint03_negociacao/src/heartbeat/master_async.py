@@ -209,6 +209,9 @@ class Master:
         tipo = f"emprestado (origem {origem})" if emprestado else "local"
         logger.info("Apresentação de Worker %s [%s]", uuid, tipo)
 
+        # Atualiza a carga com o tamanho atual da fila e dispara saturação se necessário.
+        self.set_load(len(self.tasks))
+
         if self.tasks:
             user = self.tasks.popleft()        # atômico: sem await no meio
             logger.info("Entregando QUERY (USER=%s) ao Worker %s", user, uuid)
