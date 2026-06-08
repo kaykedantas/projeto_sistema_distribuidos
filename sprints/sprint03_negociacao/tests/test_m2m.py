@@ -40,7 +40,7 @@ def test_response_rejected_reason_valido():
 
 
 def test_command_redirect_e_register_e_release_e_notify():
-    assert m2m.command_redirect("ip_a:10000")["type"] == "command_redirect"
-    assert m2m.register_temporary_worker("B1", "ip_b:10000")["type"] == "register_temporary_worker"
-    assert m2m.command_release("ip_b:10000")["type"] == "command_release"
+    assert m2m.command_redirect("ip_a:8000")["type"] == "command_redirect"
+    assert m2m.register_temporary_worker("B1", "ip_b:8000")["type"] == "register_temporary_worker"
+    assert m2m.command_release("ip_b:8000")["type"] == "command_release"
     assert m2m.notify_worker_returned("B1")["type"] == "notify_worker_returned"

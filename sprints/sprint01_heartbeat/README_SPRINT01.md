@@ -25,13 +25,13 @@ run_tests.py                   # runner de testes SEM dependências
 Envio — Worker → Master:
 
 ```json
-{ "SERVER_UUID": "MASTER_KAYKE", "TASK": "HEARTBEAT" }
+{ "SERVER_UUID": "Master_A", "TASK": "HEARTBEAT" }
 ```
 
 Resposta — Master → Worker:
 
 ```json
-{ "SERVER_UUID": "MASTER_KAYKE", "TASK": "HEARTBEAT", "RESPONSE": "ALIVE" }
+{ "SERVER_UUID": "Master_A", "TASK": "HEARTBEAT", "RESPONSE": "ALIVE" }
 ```
 
 Parâmetros: intervalo de heartbeat = **10s**; timeout de resposta = **5s**.
@@ -41,20 +41,20 @@ Parâmetros: intervalo de heartbeat = **10s**; timeout de resposta = **5s**.
 Em um terminal, suba o Master:
 
 ```bash
-python master.py --host 0.0.0.0 --port 10000 --id MASTER_KAYKE
+python master.py --host 0.0.0.0 --port 8000 --id Master_A
 ```
 
 Em outro terminal, rode o Worker:
 
 ```bash
-python worker.py --host 127.0.0.1 --port 10000 --master MASTER_KAYKE
+python worker.py --host 127.0.0.1 --port 8000 --master Master_A
 ```
 
 Saída esperada no Worker (a cada 10s):
 
 ```
-[worker] INFO: HEARTBEAT enviado para 127.0.0.1:10000
-[worker] INFO: Master MASTER_KAYKE respondeu ALIVE
+[worker] INFO: HEARTBEAT enviado para 127.0.0.1:8000
+[worker] INFO: Master Master_A respondeu ALIVE
 ```
 
 Demo rápida em um único comando:

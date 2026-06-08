@@ -300,11 +300,11 @@ def main() -> None:
                         help="SERVER_UUID do Master de origem (marca worker emprestado)")
     # Modo legado (Sprint 01/02): alvo fixo, sem descoberta.
     parser.add_argument("--host", default=None, help="(legado) IP fixo do Master")
-    parser.add_argument("--port", type=int, default=10000, help="(legado) porta fixa")
+    parser.add_argument("--port", type=int, default=8000, help="(legado) porta fixa")
     parser.add_argument("--mode", choices=["discovery", "tasks", "heartbeat"],
                         default="discovery",
                         help="discovery = Sprint 2.1 (padrão); tasks/heartbeat = alvo fixo")
-    parser.add_argument("--master", default="MASTER_KAYKE",
+    parser.add_argument("--master", default="Master_A",
                         help="(modo heartbeat) SERVER_UUID do Master alvo")
     args = parser.parse_args()
 

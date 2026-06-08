@@ -27,7 +27,7 @@ async def main():
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
-    m = master_async.Master(HOST, PORT, master_id="MASTER_KAYKE",
+    m = master_async.Master(HOST, PORT, master_id="Master_A",
                             tasks=["Michel", "Julia"])
     server = asyncio.create_task(m.start())
     await asyncio.sleep(0.3)

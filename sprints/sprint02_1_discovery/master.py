@@ -6,7 +6,7 @@ Executa o servidor assíncrono de Heartbeat. A lógica vive em
 projeto esteja no ``sys.path`` e delega para o ``main()`` do módulo.
 
 Uso:
-    python master.py --host 0.0.0.0 --port 10000 --id MASTER_KAYKE
+    python master.py --host 0.0.0.0 --port 8000 --id Master_A
 """
 
 import os

@@ -25,7 +25,7 @@ def test_ct06_devolucao_notifica_origem_e_remove_registro():
         # Master B (origem) recebe a notify_worker_returned
         b, sb, pb = await _sobe("MASTER_B")
         # Master A tem um worker emprestado registrado
-        a, sa, pa = await _sobe("MASTER_KAYKE")
+        a, sa, pa = await _sobe("MASTER_A")
         a.borrowed_in["B1"] = {"origem": f"127.0.0.1:{pb}"}
 
         # devolve: notifica B (sem worker_writer real neste teste de unidade)

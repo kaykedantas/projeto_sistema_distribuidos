@@ -26,7 +26,7 @@ run_tests.py                   # runner SEM dependencias
 | # | Direcao | Payload |
 |---|---------|---------|
 | 1 | Worker -> UDP (broadcast/multicast) | `{"TYPE":"DISCOVERY","WORKER_UUID":"W-101"}` |
-| 2 | Master -> Worker (unicast UDP) | `{"TYPE":"DISCOVERY_REPLY","MASTER_NAME":"MASTER_1","MASTER_IP":"...","MASTER_PORT":10000,"STATUS":"AVAILABLE"}` |
+| 2 | Master -> Worker (unicast UDP) | `{"TYPE":"DISCOVERY_REPLY","MASTER_NAME":"MASTER_1","MASTER_IP":"...","MASTER_PORT":8000,"STATUS":"AVAILABLE"}` |
 | 3 | Worker -> Master (TCP) | `{"TYPE":"ELECTION_ACK","WORKER_UUID":"W-101","SELECTED_MASTER":"MASTER_1"}` |
 | 4 | Master -> Worker (TCP) | `{"TYPE":"ELECTION_ACK","STATUS":"ACCEPTED","MASTER_NAME":"MASTER_1"}` |
 
@@ -42,7 +42,7 @@ o mesmo conjunto de respostas elegem o mesmo Master, sem se comunicarem.
 
 ```bash
 # Terminal 1 — Master
-python master.py --name MASTER_1 --port 10000 --disc-port 5000 --advertise-ip 127.0.0.1 --tasks Michel,Julia
+python master.py --name MASTER_1 --port 8000 --disc-port 5000 --advertise-ip 127.0.0.1 --tasks Michel,Julia
 
 # Terminal 2 — Worker (descobre sozinho; nao recebe IP/porta do Master)
 python worker.py --uuid W-101 --discovery-mode broadcast --disc-port 5000
@@ -55,12 +55,12 @@ Pre-requisitos: maquinas na **mesma sub-rede**; liberar a **porta UDP 5000** e a
 
 ```bash
 # Maquina A (Master 1):
-python master.py --name MASTER_1 --port 10000 --disc-port 5000
+python master.py --name MASTER_1 --port 8000 --disc-port 5000
 #   (o IP anunciado e autodetectado; force com --advertise-ip <IP_LAN> se houver
 #    multiplas interfaces/VPN)
 
 # Maquina B (Master 2) — opcional, para exercitar a eleicao (CT02):
-python master.py --name MASTER_2 --port 10000 --disc-port 5000
+python master.py --name MASTER_2 --port 8000 --disc-port 5000
 
 # Maquina C (Worker), mesma sub-rede:
 python worker.py --uuid W-101 --discovery-mode broadcast --disc-port 5000

@@ -29,7 +29,7 @@ async def _sobe_fake(reply):
 
 def test_discover_coleta_uma_reply_loopback():  # CT01 (lado descoberta)
     reply = {"TYPE": "DISCOVERY_REPLY", "MASTER_NAME": "MASTER_1",
-             "MASTER_IP": "127.0.0.1", "MASTER_PORT": 10000, "STATUS": "AVAILABLE"}
+             "MASTER_IP": "127.0.0.1", "MASTER_PORT": 8000, "STATUS": "AVAILABLE"}
 
     async def cenario():
         tr, port = await _sobe_fake(reply)

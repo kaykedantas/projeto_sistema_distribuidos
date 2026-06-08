@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.heartbeat import master_async, worker_async
 
-HOST, PORT, MASTER_ID = "127.0.0.1", 8765, "MASTER_KAYKE"
+HOST, PORT, MASTER_ID = "127.0.0.1", 8765, "Master_A"
 
 
 async def main():

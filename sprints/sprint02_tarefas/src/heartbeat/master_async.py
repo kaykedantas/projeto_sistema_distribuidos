@@ -42,7 +42,7 @@ class Master:
         ``QUERY``). Alimenta a fila do Master.
     """
 
-    def __init__(self, host: str, port: int, master_id: str = "MASTER_KAYKE",
+    def __init__(self, host: str, port: int, master_id: str = "Master_A",
                  tasks: Optional[Iterable[str]] = None):
         self.host = host
         self.port = port
@@ -164,7 +164,7 @@ class Master:
             await self._server.serve_forever()
 
 
-async def run_server(host: str, port: int, master_id: str = "MASTER_KAYKE",
+async def run_server(host: str, port: int, master_id: str = "Master_A",
                      tasks: Optional[Iterable[str]] = None) -> None:
     """Atalho funcional usado pelos testes de integração."""
     await Master(host, port, master_id, tasks=tasks).start()
@@ -175,8 +175,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Master (servidor de tarefas/heartbeat)")
     parser.add_argument("--host", default="0.0.0.0", help="IP de escuta")
-    parser.add_argument("--port", type=int, default=10000, help="Porta de escuta")
-    parser.add_argument("--id", default="MASTER_KAYKE", help="master_id (SERVER_UUID)")
+    parser.add_argument("--port", type=int, default=8000, help="Porta de escuta")
+    parser.add_argument("--id", default="Master_A", help="master_id (SERVER_UUID)")
     parser.add_argument("--tasks", default="Michel,Julia",
                         help="Lista inicial de tarefas (USERs) separada por vírgula")
     args = parser.parse_args()

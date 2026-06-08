@@ -58,16 +58,16 @@ from src.heartbeat import discovery
 
 def test_elege_menor_nome_lexicografico():
     replies = [
-        {"MASTER_NAME": "MASTER_2", "MASTER_IP": "1.1.1.2", "MASTER_PORT": 10000},
-        {"MASTER_NAME": "MASTER_1", "MASTER_IP": "1.1.1.1", "MASTER_PORT": 10000},
-        {"MASTER_NAME": "MASTER_3", "MASTER_IP": "1.1.1.3", "MASTER_PORT": 10000},
+        {"MASTER_NAME": "MASTER_2", "MASTER_IP": "1.1.1.2", "MASTER_PORT": 8000},
+        {"MASTER_NAME": "MASTER_1", "MASTER_IP": "1.1.1.1", "MASTER_PORT": 8000},
+        {"MASTER_NAME": "MASTER_3", "MASTER_IP": "1.1.1.3", "MASTER_PORT": 8000},
     ]
     assert discovery.elect_master(replies)["MASTER_NAME"] == "MASTER_1"
 
 def test_ordenacao_natural_master10_depois_de_master2():
     replies = [
-        {"MASTER_NAME": "MASTER_10", "MASTER_IP": "1.1.1.10", "MASTER_PORT": 10000},
-        {"MASTER_NAME": "MASTER_2", "MASTER_IP": "1.1.1.2", "MASTER_PORT": 10000},
+        {"MASTER_NAME": "MASTER_10", "MASTER_IP": "1.1.1.10", "MASTER_PORT": 8000},
+        {"MASTER_NAME": "MASTER_2", "MASTER_IP": "1.1.1.2", "MASTER_PORT": 8000},
     ]
     assert discovery.elect_master(replies)["MASTER_NAME"] == "MASTER_2"
 
@@ -76,7 +76,7 @@ def test_elect_vazio_retorna_none():
 
 def test_parse_reply_valida_ok():
     raw = {"TYPE": "DISCOVERY_REPLY", "MASTER_NAME": "MASTER_1",
-           "MASTER_IP": "1.1.1.1", "MASTER_PORT": 10000, "STATUS": "AVAILABLE"}
+           "MASTER_IP": "1.1.1.1", "MASTER_PORT": 8000, "STATUS": "AVAILABLE"}
     assert discovery.parse_reply(raw)["MASTER_NAME"] == "MASTER_1"
 
 def test_parse_reply_sem_master_port_descarta():
@@ -85,8 +85,8 @@ def test_parse_reply_sem_master_port_descarta():
 
 def test_parse_reply_ignora_campos_extras():
     raw = {"TYPE": "DISCOVERY_REPLY", "MASTER_NAME": "MASTER_1", "MASTER_IP": "1.1.1.1",
-           "MASTER_PORT": 10000, "EXTRA": "x"}
-    assert discovery.parse_reply(raw)["MASTER_PORT"] == 10000
+           "MASTER_PORT": 8000, "EXTRA": "x"}
+    assert discovery.parse_reply(raw)["MASTER_PORT"] == 8000
 ```
 
 - [ ] **Step 2: Implementar `discovery.py` (lógica)**
@@ -179,7 +179,7 @@ async def _sobe_fake(reply):
 
 def test_discover_coleta_uma_reply_loopback():
     reply = {"TYPE": "DISCOVERY_REPLY", "MASTER_NAME": "MASTER_1",
-             "MASTER_IP": "127.0.0.1", "MASTER_PORT": 10000, "STATUS": "AVAILABLE"}
+             "MASTER_IP": "127.0.0.1", "MASTER_PORT": 8000, "STATUS": "AVAILABLE"}
     async def cenario():
         tr, port = await _sobe_fake(reply)
         try:
@@ -483,7 +483,7 @@ git add -A && git commit -m "test(sprint-2.1): e2e descoberta→heartbeat e CT04
 - Create: `README.md` (Sprint 2.1)
 
 - [ ] **Step 1: Entrypoints**
-  - `master.py`: `--name MASTER_1`, `--port 10000` (TCP), `--disc-port 5000`,
+  - `master.py`: `--name MASTER_1`, `--port 8000` (TCP), `--disc-port 5000`,
     `--advertise-ip`, `--discovery-mode`. Sobe TCP + responder UDP.
   - `worker.py`: remove alvo fixo; `--uuid`, `--discovery-mode`, `--disc-port`.
     Faz `bootstrap` e segue para `work_loop`.
@@ -501,7 +501,7 @@ git add -A && git commit -m "test(sprint-2.1): e2e descoberta→heartbeat e CT04
   2 máquinas**:
   ```
   # Máquina A (Master):
-  python master.py --name MASTER_1 --port 10000 --disc-port 5000
+  python master.py --name MASTER_1 --port 8000 --disc-port 5000
   # (rode outro Master em MASTER_2 em outra máquina, se quiser testar CT02)
   # Máquina B (Worker), mesma sub-rede:
   python worker.py --uuid W-101 --discovery-mode broadcast --disc-port 5000

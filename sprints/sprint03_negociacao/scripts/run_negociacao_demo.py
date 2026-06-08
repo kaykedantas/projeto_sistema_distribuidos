@@ -33,17 +33,17 @@ async def main():
     sb = await asyncio.start_server(b.handle_client, "127.0.0.1", 0)
     pb = sb.sockets[0].getsockname()[1]
 
-    a = master_async.Master("127.0.0.1", 0, master_id="MASTER_KAYKE", name="MASTER_KAYKE",
+    a = master_async.Master("127.0.0.1", 0, master_id="MASTER_A", name="MASTER_A",
                             tasks=["Michel"], capacity=100, release_threshold=60)
     sa = await asyncio.start_server(a.handle_client, "127.0.0.1", 0)
     pa = sa.sockets[0].getsockname()[1]
     a.neighbors["MASTER_B"] = ("127.0.0.1", pb)
 
-    print(f">>> MASTER_KAYKE (TCP {pa}) e MASTER_B (TCP {pb}, 2 ociosos) no ar")
+    print(f">>> MASTER_A (TCP {pa}) e MASTER_B (TCP {pb}, 2 ociosos) no ar")
 
     # 1) A satura e pede ajuda
     a.set_load(150)
-    print(">>> MASTER_KAYKE saturado (load=150 > capacity=100). Pedindo ajuda a B...")
+    print(">>> MASTER_A saturado (load=150 > capacity=100). Pedindo ajuda a B...")
     resp = await a.request_help_to("MASTER_B", workers_needed=1, timeout=2.0)
     print(f">>> Resposta de B: {resp['type']} "
           f"({resp['payload'].get('workers_offered', 0)} worker(s) ofertado(s))")
@@ -58,7 +58,7 @@ async def main():
 
     # 3) A normaliza e devolve o worker
     a.set_load(40)
-    print(">>> MASTER_KAYKE normalizou (load=40 < release=60). Devolvendo worker...")
+    print(">>> MASTER_A normalizou (load=40 < release=60). Devolvendo worker...")
     await a.release_worker(wid, origin_neighbor=("127.0.0.1", pb))
     await asyncio.sleep(0.1)
     print(f">>> Devolvido. Em A borrowed_in={list(a.borrowed_in)} | "

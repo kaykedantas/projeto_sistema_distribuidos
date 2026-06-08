@@ -61,7 +61,7 @@ class Master:
         ``QUERY``). Alimenta a fila do Master.
     """
 
-    def __init__(self, host: str, port: int, master_id: str = "MASTER_KAYKE",
+    def __init__(self, host: str, port: int, master_id: str = "Master_A",
                  tasks: Optional[Iterable[str]] = None,
                  name: Optional[str] = None,
                  advertise_ip: Optional[str] = None,
@@ -208,9 +208,6 @@ class Master:
         })
         tipo = f"emprestado (origem {origem})" if emprestado else "local"
         logger.info("Apresentação de Worker %s [%s]", uuid, tipo)
-
-        # Atualiza a carga com o tamanho atual da fila e dispara saturação se necessário.
-        self.set_load(len(self.tasks))
 
         if self.tasks:
             user = self.tasks.popleft()        # atômico: sem await no meio
@@ -471,37 +468,20 @@ class Master:
             await self._server.serve_forever()
 
 
-async def run_server(host: str, port: int, master_id: str = "MASTER_KAYKE",
+async def run_server(host: str, port: int, master_id: str = "Master_A",
                      tasks: Optional[Iterable[str]] = None,
                      name: Optional[str] = None,
                      advertise_ip: Optional[str] = None,
                      disc_port: Optional[int] = None,
                      neighbors: Optional[dict] = None,
                      capacity: int = 100,
-                     release_threshold: int = 60,
-                     idle_workers: Optional[list] = None) -> None:
+                     release_threshold: int = 60) -> None:
     """Atalho funcional. Se ``disc_port`` for dado, sobe também o responder UDP."""
     m = Master(host, port, master_id, tasks=tasks, name=name,
                advertise_ip=advertise_ip, capacity=capacity,
                release_threshold=release_threshold)
     if neighbors:
         m.neighbors.update(neighbors)
-    if idle_workers:
-        m.idle_workers = list(idle_workers)
-
-    # Wira o callback de saturação: ao saturar, pede ajuda a todos os vizinhos.
-    if m.neighbors:
-        def _on_saturation(workers_needed):
-            loop = asyncio.get_event_loop()
-            for nid in list(m.neighbors):
-                loop.create_task(m.request_help_to(nid, workers_needed))
-
-        def _on_release():
-            pass  # devolução é feita explicitamente por release_worker
-
-        m.on_saturation = _on_saturation
-        m.on_release = _on_release
-
     if disc_port is not None:
         await m.start_discovery(disc_port=disc_port, tcp_port=port)
     await m.start()
@@ -525,13 +505,13 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Master (negociação + descoberta + tarefas + heartbeat)")
     parser.add_argument("--host", default="0.0.0.0", help="IP de escuta TCP")
-    parser.add_argument("--port", type=int, default=10000, help="Porta TCP")
-    parser.add_argument("--id", default="MASTER_KAYKE", help="master_id (SERVER_UUID)")
+    parser.add_argument("--port", type=int, default=8000, help="Porta TCP")
+    parser.add_argument("--id", default="Master_A", help="master_id (SERVER_UUID)")
     parser.add_argument("--name", default=None,
                         help="MASTER_NAME para descoberta/eleição (ex.: MASTER_1)")
     parser.add_argument("--advertise-ip", default=None,
                         help="IP anunciado nas DISCOVERY_REPLY (auto-detecta se omitido)")
-    parser.add_argument("--disc-port", type=int, default=10000,
+    parser.add_argument("--disc-port", type=int, default=5000,
                         help="Porta UDP de descoberta (0 desativa)")
     parser.add_argument("--tasks", default="Michel,Julia",
                         help="Lista inicial de tarefas (USERs) separada por vírgula")
@@ -541,8 +521,6 @@ def main() -> None:
                         help="Threshold de saturação")
     parser.add_argument("--release-threshold", type=int, default=60,
                         help="Threshold de liberação (histerese; < capacity)")
-    parser.add_argument("--idle-workers", default="",
-                        help="Workers ociosos pré-registrados (ex: W1,W2,W3) — usados em M2M")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -552,14 +530,12 @@ def main() -> None:
     tarefas = [t.strip() for t in args.tasks.split(",") if t.strip()]
     disc = args.disc_port if args.disc_port and args.disc_port > 0 else None
     vizinhos = _parse_neighbors(args.neighbors)
-    ociosos = [{"id": w.strip(), "address": "?"} for w in args.idle_workers.split(",") if w.strip()]
     try:
         asyncio.run(run_server(args.host, args.port, args.id, tasks=tarefas,
                                name=args.name, advertise_ip=args.advertise_ip,
                                disc_port=disc, neighbors=vizinhos,
                                capacity=args.capacity,
-                               release_threshold=args.release_threshold,
-                               idle_workers=ociosos))
+                               release_threshold=args.release_threshold))
     except KeyboardInterrupt:
         logger.info("Master interrompido pelo usuário")
 
