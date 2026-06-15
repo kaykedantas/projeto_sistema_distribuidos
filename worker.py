@@ -238,7 +238,7 @@ async def run_forever(host: str, port: int, master_uuid: str,
 # Sprint 02 — ciclo de tarefas (QUERY / NO_TASK / STATUS / ACK)
 # ────────────────────────────────────────────────────────────────
 
-async def process_task(user, force=None, min_delay=0.05, max_delay=0.3):
+async def process_task(user, force=None, min_delay=5.00, max_delay=8.00):
     """Simula processamento de uma QUERY. Retorna "OK" ou "NOK" (~10% falha)."""
     logger.debug("Processando tarefa USER=%s", user)
     await asyncio.sleep(random.uniform(min_delay, max_delay))
