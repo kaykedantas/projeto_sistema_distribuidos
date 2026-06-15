@@ -1,0 +1,2 @@
+# Sprint 4 — coleta de métricas de sistema para o performance_report
+psutil>=5.9

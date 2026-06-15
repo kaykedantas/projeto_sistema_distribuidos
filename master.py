@@ -21,9 +21,16 @@ DEFAULT_TASKS         = "Michel,Julia"  # Tarefas iniciais separadas por vírgul
 DEFAULT_CAPACITY      = 4      # Limiar de saturação (Sprint 3 — histerese)
 DEFAULT_RELEASE_THRESHOLD = 2       # Limiar de liberação (DEVE ser < capacity)
 DEFAULT_MAX_TASK_ATTEMPTS = 3        # tentativas por tarefa antes de descartar (NOK)
-# Vizinhos M2M — exemplo: "MASTER_B@192.168.1.10:8001,MASTER_C@192.168.1.11:8001"
-# TROQUE IP_DO_AMIGO pelo IP da máquina do vizinho (e o nome MASTER_B se ele usar outro).
-DEFAULT_NEIGHBORS     = "10.189.36.154:7011"
+# ---- Sprint 4: Supervisor de Métricas ----
+DEFAULT_SUPERVISOR_UUID     = "michel_1"     # server_uuid no payload (≠ master_id MASTER_9)
+DEFAULT_SUPERVISOR_HOST     = "nuted-ia.dev" # host do supervisor
+DEFAULT_SUPERVISOR_PORT     = 443            # TLS sobre TCP
+DEFAULT_SUPERVISOR_INTERVAL = 10.0           # segundos entre relatórios
+DEFAULT_WARN_CPU            = 85             # config_thresholds.warn_cpu_percent
+DEFAULT_WARN_MEM            = 85             # config_thresholds.warn_memory_percent
+# Vizinhos M2M — formato "NOME@ip:porta" (separe vários por vírgula).
+# O NOME deve casar com o --id/--name do master vizinho (aqui: MASTER_8).
+DEFAULT_NEIGHBORS     = "MASTER_8@10.189.36.154:7011"
 # 
 #
 # 
@@ -35,12 +42,21 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import re
 import socket
+import ssl
 import sys
+import time
 import uuid
 from collections import deque
+from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Union
+
+try:
+    import psutil
+except ImportError:                      # supervisor degrada sem derrubar o Master
+    psutil = None
 
 logger = logging.getLogger("master")
 
@@ -184,7 +200,14 @@ class Master:
                  advertise_ip: Optional[str] = None,
                  capacity: int = DEFAULT_CAPACITY,
                  release_threshold: int = DEFAULT_RELEASE_THRESHOLD,
-                 max_task_attempts: int = DEFAULT_MAX_TASK_ATTEMPTS):
+                 max_task_attempts: int = DEFAULT_MAX_TASK_ATTEMPTS,
+                 supervisor_uuid: str = DEFAULT_SUPERVISOR_UUID,
+                 supervisor_host: str = DEFAULT_SUPERVISOR_HOST,
+                 supervisor_port: int = DEFAULT_SUPERVISOR_PORT,
+                 supervisor_interval: float = DEFAULT_SUPERVISOR_INTERVAL,
+                 supervisor_enabled: bool = True,
+                 warn_cpu_percent: int = DEFAULT_WARN_CPU,
+                 warn_memory_percent: int = DEFAULT_WARN_MEM):
         self.host = host
         self.port = port
         self.master_id = master_id
@@ -205,6 +228,22 @@ class Master:
         self.in_flight = {}
         self.task_attempts = {}
         self.max_task_attempts = max_task_attempts
+
+        # Sprint 4: contadores e timestamps para o performance_report
+        self._start_time = time.time()
+        self.tasks_completed = 0
+        self.tasks_failed = 0
+        self.workers_failed = 0
+        # deque paralela a self.tasks com o instante de enfileiramento de cada tarefa
+        self.task_times = deque(time.time() for _ in self.tasks)
+        # Config do supervisor (Sprint 4)
+        self.supervisor_uuid = supervisor_uuid
+        self.supervisor_host = supervisor_host
+        self.supervisor_port = supervisor_port
+        self.supervisor_interval = supervisor_interval
+        self.supervisor_enabled = supervisor_enabled
+        self.warn_cpu_percent = warn_cpu_percent
+        self.warn_memory_percent = warn_memory_percent
 
         # Discovery UDP
         self.disc_transport = None
@@ -348,7 +387,7 @@ class Master:
             return
 
         if self.tasks:
-            user = self.tasks.popleft()
+            user = self._dequeue()
             if ctx is not None:                 # marca tarefa em andamento nesta conexão
                 ctx["uuid"] = uuid_
                 ctx["task"] = user
@@ -388,9 +427,11 @@ class Master:
         self.in_flight.pop(uuid_, None)
 
         if status == "OK":
+            self.tasks_completed += 1
             if user is not None:
                 self.task_attempts.pop(user, None)  # tarefa concluída: zera tentativas
         else:  # NOK -> retentar com limite (dead-letter ao exceder)
+            self.tasks_failed += 1
             if user is not None:
                 self._requeue_task(user, motivo="NOK")
 
@@ -413,7 +454,8 @@ class Master:
             return
         ctx["task"] = None
         self.in_flight.pop(ctx.get("uuid"), None)
-        self.tasks.appendleft(user)
+        self.workers_failed += 1
+        self._enqueue_front(user)
         self.set_load(len(self.tasks))
         logger.warning("Worker %s caiu com TASK '%s' em andamento -> reenfileirada (fila=%d)",
                        ctx.get("uuid"), user, len(self.tasks))
@@ -427,7 +469,7 @@ class Master:
         attempts = self.task_attempts.get(user, 0) + 1
         if attempts < self.max_task_attempts:
             self.task_attempts[user] = attempts
-            self.tasks.appendleft(user)
+            self._enqueue_front(user)
             self.set_load(len(self.tasks))
             logger.warning("%s em '%s' (tentativa %d/%d) -> reenfileirada (fila=%d)",
                            motivo, user, attempts, self.max_task_attempts, len(self.tasks))
@@ -435,6 +477,31 @@ class Master:
             self.task_attempts.pop(user, None)
             logger.error("'%s' excedeu %d tentativas (%s) -> descartada (dead-letter)",
                          user, self.max_task_attempts, motivo)
+
+    # ── Fila de tarefas com timestamps (Sprint 4) ───────────────
+
+    def _enqueue(self, user) -> None:
+        """Adiciona nova tarefa ao fim da fila."""
+        self.tasks.append(user)
+        self.task_times.append(time.time())
+
+    def _enqueue_front(self, user) -> None:
+        """Devolve tarefa à frente da fila (reenfileiramento)."""
+        self.tasks.appendleft(user)
+        self.task_times.appendleft(time.time())
+
+    def _dequeue(self):
+        """Retira a próxima tarefa (FIFO), mantendo task_times em sincronia."""
+        user = self.tasks.popleft()
+        if self.task_times:
+            self.task_times.popleft()
+        return user
+
+    def oldest_task_age_s(self) -> int:
+        """Idade (s) da tarefa pendente mais antiga; 0 se a fila está vazia."""
+        if not self.task_times:
+            return 0
+        return int(time.time() - self.task_times[0])
 
     async def _handle_election_ack(self, msg, writer, addr) -> None:
         """Sprint 2.1: recebe confirmação de eleição do Worker e responde ACCEPTED."""
@@ -719,7 +786,7 @@ class Master:
                 print(f"  Tarefas em andamento: {len(self.in_flight)} {self.in_flight}")
                 continue
             # Qualquer outra entrada é tratada como nome de tarefa
-            self.tasks.append(cmd)
+            self._enqueue(cmd)
             self.set_load(len(self.tasks))
             print(f"  [+] Tarefa '{cmd}' adicionada — fila: {len(self.tasks)} tarefa(s)")
 
@@ -742,6 +809,30 @@ class Master:
             self.disc_transport.close()
             self.disc_transport = None
 
+    # ── Sprint 4: loop do supervisor ─────────────────────────────
+
+    async def _probe_neighbors(self) -> dict:
+        """Checa alcançabilidade TCP de cada vizinho (status no relatório)."""
+        status = {}
+        for nid in list(self.neighbors):
+            status[nid] = await self._try_connect_neighbor(nid)
+        return status
+
+    async def _supervisor_loop(self) -> None:
+        """A cada supervisor_interval: monta e envia o performance_report."""
+        logger.info("supervisor: relatórios a cada %.0fs -> %s:%s (uuid=%s)",
+                    self.supervisor_interval, self.supervisor_host,
+                    self.supervisor_port, self.supervisor_uuid)
+        while True:
+            try:
+                neighbor_status = await self._probe_neighbors()
+                payload = build_performance_report(self, neighbor_status)
+                await send_report_tls(payload, self.supervisor_host,
+                                      self.supervisor_port, sni=self.supervisor_host)
+            except Exception:
+                logger.warning("supervisor: ciclo falhou (ignorado)", exc_info=False)
+            await asyncio.sleep(self.supervisor_interval)
+
     async def start(self) -> None:
         """Sobe o servidor TCP, exibe o banner e fica servindo para sempre."""
         self._server = await asyncio.start_server(
@@ -758,10 +849,143 @@ class Master:
             self.set_load(len(self.tasks))
         await self._print_startup_banner()
         async with self._server:
-            await asyncio.gather(
-                self._server.serve_forever(),
-                self._stdin_task_feeder(),
-            )
+            coros = [self._server.serve_forever(), self._stdin_task_feeder()]
+            if self.supervisor_enabled and psutil is not None:
+                coros.append(self._supervisor_loop())
+            elif self.supervisor_enabled and psutil is None:
+                logger.warning("psutil não instalado (pip install -r requirements.txt); "
+                               "supervisor desativado")
+            # /sair fecha o servidor -> serve_forever() é cancelado; saída limpa.
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.gather(*coros)
+
+
+# ────────────────────────────────────────────────────────────────
+# Sprint 4 — Supervisor de Métricas (performance_report)
+# ────────────────────────────────────────────────────────────────
+
+def _collect_system_metrics(start_time: float) -> dict:
+    """Coleta CPU/memória/disco/load via psutil. Requer psutil instalado."""
+    vm = psutil.virtual_memory()
+    du = psutil.disk_usage(os.path.abspath(os.sep))
+    try:
+        la1, la5, _ = psutil.getloadavg()
+    except (OSError, AttributeError):
+        la1 = la5 = 0.0
+    return {
+        "uptime_seconds": int(time.time() - start_time),
+        "load_average_1m": round(la1, 2),
+        "load_average_5m": round(la5, 2),
+        "cpu": {
+            "usage_percent": round(psutil.cpu_percent(), 2),
+            "count_logical": psutil.cpu_count(logical=True) or 0,
+            "count_physical": psutil.cpu_count(logical=False) or 0,
+        },
+        "memory": {
+            "total_mb": vm.total // (1024 * 1024),
+            "available_mb": vm.available // (1024 * 1024),
+            "percent_used": round(vm.percent, 2),
+            "memory_used": (vm.total - vm.available) // (1024 * 1024),
+        },
+        "disk": {
+            "total_gb": round(du.total / (1024 ** 3), 1),
+            "free_gb": round(du.free / (1024 ** 3), 1),
+            "percent_used": round(du.percent, 1),
+        },
+    }
+
+
+def _build_farm_state(master) -> dict:
+    """Estado da farm (workers + tarefas) a partir do estado interno do Master."""
+    total_registered = len(master.workers)
+    workers_received = len(master.borrowed_in)
+    borrowed = [{"direction": "out", "peer_uuid": info.get("para")}
+                for info in master.lent_out.values()]
+    borrowed += [{"direction": "in", "peer_uuid": info.get("origem")}
+                 for info in master.borrowed_in.values()]
+    return {
+        "workers": {
+            "total_registered": total_registered,
+            "workers_utilization": len(master.in_flight),
+            "workers_alive": total_registered,
+            "workers_idle": len(master.idle_workers),
+            "workers_borrowed": len(master.lent_out),
+            "workers_received": workers_received,
+            "workers_failed": master.workers_failed,
+            "workers_home": total_registered - workers_received,
+            "workers_available_capacity": len(master.idle_workers),
+            "borrowed_workers": borrowed,
+        },
+        "tasks": {
+            "tasks_pending": len(master.tasks),
+            "tasks_running": len(master.in_flight),
+            "tasks_completed": master.tasks_completed,
+            "tasks_failed": master.tasks_failed,
+            "oldest_task_age_s": master.oldest_task_age_s(),
+        },
+    }
+
+
+def _build_neighbors(master, neighbor_status) -> list:
+    """Lista de vizinhos com status de alcançabilidade para o relatório."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    out = []
+    for nid in master.neighbors:
+        ok = bool((neighbor_status or {}).get(nid))
+        out.append({
+            "server_uuid": nid,
+            "status": "available" if ok else "unavailable",
+            "last_heartbeat": now if ok else None,
+        })
+    return out
+
+
+def build_performance_report(master, neighbor_status=None) -> dict:
+    """Monta o payload performance_report (função pura; psutil é lido aqui)."""
+    return {
+        "server_uuid": master.supervisor_uuid,
+        "hostname": socket.gethostname(),
+        "role": "master",
+        "task": "performance_report",
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "message_id": str(uuid.uuid4()),
+        "payload_version": "sprint4-monitor",
+        "performance": {
+            "system": _collect_system_metrics(master._start_time),
+            "farm_state": _build_farm_state(master),
+            "config_thresholds": {
+                "max_task": master.capacity,
+                "warn_cpu_percent": master.warn_cpu_percent,
+                "warn_memory_percent": master.warn_memory_percent,
+                "release_task": master.release_threshold,
+            },
+            "neighbors": _build_neighbors(master, neighbor_status),
+        },
+    }
+
+
+async def send_report_tls(payload: dict, host: str, port: int,
+                          sni: str = None, timeout: float = 5.0) -> None:
+    """Fire-and-forget: abre TLS, envia JSON+\\n e fecha. Engole falhas (loga)."""
+    data = encode_message(payload)        # json + \n (mesma serialização do projeto)
+    ctx = ssl.create_default_context()
+    writer = None
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port, ssl=ctx,
+                                    server_hostname=sni or host),
+            timeout=timeout)
+        writer.write(data)
+        await writer.drain()
+        logger.info("supervisor: relatório enviado a %s:%s (%d bytes)",
+                    host, port, len(data))
+    except (asyncio.TimeoutError, OSError, ssl.SSLError) as e:
+        logger.warning("supervisor: envio a %s:%s falhou (%s)", host, port, e)
+    finally:
+        if writer is not None:
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
 
 
 # ────────────────────────────────────────────────────────────────
@@ -802,12 +1026,23 @@ async def run_server(host: str = DEFAULT_HOST,
                      neighbors: Optional[dict] = None,
                      capacity: int = DEFAULT_CAPACITY,
                      release_threshold: int = DEFAULT_RELEASE_THRESHOLD,
-                     max_task_attempts: int = DEFAULT_MAX_TASK_ATTEMPTS) -> None:
+                     max_task_attempts: int = DEFAULT_MAX_TASK_ATTEMPTS,
+                     supervisor_uuid: str = DEFAULT_SUPERVISOR_UUID,
+                     supervisor_host: str = DEFAULT_SUPERVISOR_HOST,
+                     supervisor_port: int = DEFAULT_SUPERVISOR_PORT,
+                     supervisor_interval: float = DEFAULT_SUPERVISOR_INTERVAL,
+                     supervisor_enabled: bool = True,
+                     warn_cpu_percent: int = DEFAULT_WARN_CPU,
+                     warn_memory_percent: int = DEFAULT_WARN_MEM) -> None:
     """Cria e inicia o Master. Se disc_port for dado, sobe também o responder UDP."""
     m = Master(host, port, master_id, tasks=tasks, name=name,
                advertise_ip=advertise_ip, capacity=capacity,
                release_threshold=release_threshold,
-               max_task_attempts=max_task_attempts)
+               max_task_attempts=max_task_attempts,
+               supervisor_uuid=supervisor_uuid, supervisor_host=supervisor_host,
+               supervisor_port=supervisor_port, supervisor_interval=supervisor_interval,
+               supervisor_enabled=supervisor_enabled,
+               warn_cpu_percent=warn_cpu_percent, warn_memory_percent=warn_memory_percent)
     if neighbors:
         m.neighbors.update(neighbors)
     _setup_auto_callbacks(m)
@@ -817,14 +1052,25 @@ async def run_server(host: str = DEFAULT_HOST,
 
 
 def _parse_neighbors(spec):
-    """Converte 'B@127.0.0.1:8001,C@127.0.0.1:8002' em {id: (ip, porta)}."""
+    """Converte 'B@127.0.0.1:8001,C@127.0.0.1:8002' em {id: (ip, porta)}.
+
+    Tolera também o formato sem nome ('127.0.0.1:8001'): nesse caso o próprio
+    endereço vira o id do vizinho. Entradas inválidas são ignoradas com aviso
+    (em vez de derrubar a inicialização).
+    """
     out = {}
     for item in (spec or "").split(","):
         item = item.strip()
         if not item:
             continue
-        mid, _, addr = item.partition("@")
+        if "@" in item:
+            mid, _, addr = item.partition("@")
+        else:
+            mid = addr = item            # 'ip:porta' sem nome -> id sintetizado
         host, _, port = addr.rpartition(":")
+        if not host or not port.isdigit():
+            logger.warning("Vizinho ignorado (formato inválido, use NOME@ip:porta): %r", item)
+            continue
         out[mid] = (host, int(port))
     return out
 
@@ -860,6 +1106,20 @@ def main() -> None:
                         help=f"Threshold de liberação Sprint 3 (padrão: {DEFAULT_RELEASE_THRESHOLD})")
     parser.add_argument("--max-attempts", type=int, default=DEFAULT_MAX_TASK_ATTEMPTS,
                         help=f"Tentativas por tarefa antes de descartar em NOK (padrão: {DEFAULT_MAX_TASK_ATTEMPTS})")
+    parser.add_argument("--supervisor-uuid", default=DEFAULT_SUPERVISOR_UUID,
+                        help=f"server_uuid no payload do supervisor (padrão: {DEFAULT_SUPERVISOR_UUID})")
+    parser.add_argument("--supervisor-host", default=DEFAULT_SUPERVISOR_HOST,
+                        help=f"host do supervisor (padrão: {DEFAULT_SUPERVISOR_HOST})")
+    parser.add_argument("--supervisor-port", type=int, default=DEFAULT_SUPERVISOR_PORT,
+                        help=f"porta TLS do supervisor (padrão: {DEFAULT_SUPERVISOR_PORT})")
+    parser.add_argument("--supervisor-interval", type=float, default=DEFAULT_SUPERVISOR_INTERVAL,
+                        help=f"segundos entre relatórios (padrão: {DEFAULT_SUPERVISOR_INTERVAL})")
+    parser.add_argument("--no-supervisor", action="store_true",
+                        help="desativa o envio de métricas ao supervisor")
+    parser.add_argument("--warn-cpu", type=int, default=DEFAULT_WARN_CPU,
+                        help=f"limiar de alerta de CPU (padrão: {DEFAULT_WARN_CPU})")
+    parser.add_argument("--warn-mem", type=int, default=DEFAULT_WARN_MEM,
+                        help=f"limiar de alerta de memória (padrão: {DEFAULT_WARN_MEM})")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -884,6 +1144,13 @@ def main() -> None:
             capacity=args.capacity,
             release_threshold=args.release_threshold,
             max_task_attempts=args.max_attempts,
+            supervisor_uuid=args.supervisor_uuid,
+            supervisor_host=args.supervisor_host,
+            supervisor_port=args.supervisor_port,
+            supervisor_interval=args.supervisor_interval,
+            supervisor_enabled=not args.no_supervisor,
+            warn_cpu_percent=args.warn_cpu,
+            warn_memory_percent=args.warn_mem,
         ))
     except KeyboardInterrupt:
         logger.info("Master interrompido pelo usuário")
