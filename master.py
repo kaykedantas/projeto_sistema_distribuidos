@@ -4,6 +4,7 @@ master.py — Nó Master unificado (Sprint 01 + 02 + 03).
 Contém toda a lógica de messaging, M2M e discovery embutida neste único arquivo,
 sem dependências externas além da biblioteca padrão do Python.
 
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   CONFIGURAÇÃO DE PORTAS — altere aqui para os testes em sala
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -15,12 +16,14 @@ sem dependências externas além da biblioteca padrão do Python.
 DEFAULT_HOST          = "0.0.0.0"    # IP de escuta TCP (0.0.0.0 = todas as interfaces)
 DEFAULT_TCP_PORT      = 7011         # Porta TCP deste Master
 DEFAULT_DISC_PORT     = 5000         # Porta UDP de descoberta (0 = desativada)
-DEFAULT_MASTER_ID     = "Master_A"   # Identificador único deste Master
+DEFAULT_MASTER_ID     = "MASTER_9"   # Identificador único deste Master (o --name deriva disso)
 DEFAULT_TASKS         = "Michel,Julia"  # Tarefas iniciais separadas por vírgula
-DEFAULT_CAPACITY      = 3          # Limiar de saturação (Sprint 3 — histerese)
-DEFAULT_RELEASE_THRESHOLD = 60       # Limiar de liberação (< capacity)
+DEFAULT_CAPACITY      = 4      # Limiar de saturação (Sprint 3 — histerese)
+DEFAULT_RELEASE_THRESHOLD = 2       # Limiar de liberação (DEVE ser < capacity)
+DEFAULT_MAX_TASK_ATTEMPTS = 3        # tentativas por tarefa antes de descartar (NOK)
 # Vizinhos M2M — exemplo: "MASTER_B@192.168.1.10:8001,MASTER_C@192.168.1.11:8001"
-DEFAULT_NEIGHBORS     = ""
+# TROQUE IP_DO_AMIGO pelo IP da máquina do vizinho (e o nome MASTER_B se ele usar outro).
+DEFAULT_NEIGHBORS     = "10.189.36.154:7011"
 # 
 #
 # 
@@ -180,7 +183,8 @@ class Master:
                  name: Optional[str] = None,
                  advertise_ip: Optional[str] = None,
                  capacity: int = DEFAULT_CAPACITY,
-                 release_threshold: int = DEFAULT_RELEASE_THRESHOLD):
+                 release_threshold: int = DEFAULT_RELEASE_THRESHOLD,
+                 max_task_attempts: int = DEFAULT_MAX_TASK_ATTEMPTS):
         self.host = host
         self.port = port
         self.master_id = master_id
@@ -192,6 +196,15 @@ class Master:
         # Registro de Workers: uuid -> {emprestado, origem, concluidas}
         self.workers = {}
         self._server = None
+
+        # Tolerância a falhas de tarefa (entrega at-least-once):
+        #   in_flight     : worker_uuid -> user (tarefa entregue e ainda NÃO confirmada; p/ observabilidade)
+        #   task_attempts : user -> nº de tentativas já feitas (limite de retentativa por NOK)
+        #   A autoridade do reenfileiramento on-disconnect é o `ctx` por conexão (ver handle_client),
+        #   evitando corrida quando o mesmo UUID reconecta antes do EOF da conexão antiga ser tratado.
+        self.in_flight = {}
+        self.task_attempts = {}
+        self.max_task_attempts = max_task_attempts
 
         # Discovery UDP
         self.disc_transport = None
@@ -250,6 +263,8 @@ class Master:
                             writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.info("Nova conexão de %s", addr)
+        # Tarefa em andamento NESTA conexão (autoridade do reenfileiramento on-disconnect).
+        ctx = {"uuid": None, "task": None}
         try:
             while True:
                 msg = await read_message(reader)
@@ -263,9 +278,9 @@ class Master:
                 if msg.get("TASK") == "HEARTBEAT":
                     await self._handle_heartbeat(writer, addr)
                 elif msg.get("WORKER") == "ALIVE":
-                    await self._handle_apresentacao(msg, writer, addr)
+                    await self._handle_apresentacao(msg, writer, addr, ctx)
                 elif "STATUS" in msg:
-                    await self._handle_status(msg, writer, addr)
+                    await self._handle_status(msg, writer, addr, ctx)
                 elif msg.get("TYPE") == "ELECTION_ACK":
                     await self._handle_election_ack(msg, writer, addr)
                 elif msg.get("type") in ("request_help", "response_accepted",
@@ -279,6 +294,8 @@ class Master:
         except Exception:
             logger.exception("Erro inesperado ao tratar %s", addr)
         finally:
+            # Se o worker caiu com uma tarefa em andamento, devolve-a à fila (at-least-once).
+            self._requeue_if_inflight(ctx)
             writer.close()
             with contextlib.suppress(Exception):
                 await writer.wait_closed()
@@ -296,9 +313,11 @@ class Master:
         })
         logger.info("Resposta ALIVE enviada para %s", addr)
 
-    async def _handle_apresentacao(self, msg, writer, addr) -> None:
+    async def _handle_apresentacao(self, msg, writer, addr, ctx=None) -> None:
         """Sprint 02: apresentação do Worker -> entrega QUERY ou NO_TASK.
-        Sprint 3.1: verifica comandos M2M pendentes antes de servir tarefas."""
+        Sprint 3.1: verifica comandos M2M pendentes antes de servir tarefas.
+        Tolerância a falhas: registra a tarefa entregue em `ctx` (por conexão) para
+        permitir reenfileiramento caso o Worker caia antes de reportar STATUS."""
         uuid_ = msg.get("WORKER_UUID")
         if not uuid_:
             logger.warning("Apresentação sem WORKER_UUID ignorada: %s", msg)
@@ -330,6 +349,10 @@ class Master:
 
         if self.tasks:
             user = self.tasks.popleft()
+            if ctx is not None:                 # marca tarefa em andamento nesta conexão
+                ctx["uuid"] = uuid_
+                ctx["task"] = user
+            self.in_flight[uuid_] = user        # espelho p/ observabilidade (/workers)
             self.set_load(len(self.tasks))  # atualiza carga após retirar tarefa
             logger.info("Entregando QUERY (USER=%s) ao Worker %s", user, uuid_)
             await send_message(writer, {"TASK": "QUERY", "USER": user})
@@ -342,8 +365,10 @@ class Master:
             logger.info("Fila vazia: NO_TASK para Worker %s", uuid_)
             await send_message(writer, {"TASK": "NO_TASK"})
 
-    async def _handle_status(self, msg, writer, addr) -> None:
-        """Sprint 02: recebe STATUS, registra e devolve ACK."""
+    async def _handle_status(self, msg, writer, addr, ctx=None) -> None:
+        """Sprint 02: recebe STATUS, registra e devolve ACK.
+        Tolerância a falhas: confirma a tarefa em andamento (OK) ou reenfileira (NOK)
+        respeitando o limite de tentativas."""
         uuid_ = msg.get("WORKER_UUID")
         status = msg.get("STATUS")
         if not uuid_ or status not in ("OK", "NOK"):
@@ -354,11 +379,62 @@ class Master:
             "emprestado": False, "origem": None, "concluidas": 0,
         })
         info["concluidas"] += 1
+
+        # Consome a tarefa em andamento desta conexão (se houver).
+        user = None
+        if ctx is not None and ctx.get("uuid") == uuid_:
+            user = ctx.get("task")
+            ctx["task"] = None
+        self.in_flight.pop(uuid_, None)
+
+        if status == "OK":
+            if user is not None:
+                self.task_attempts.pop(user, None)  # tarefa concluída: zera tentativas
+        else:  # NOK -> retentar com limite (dead-letter ao exceder)
+            if user is not None:
+                self._requeue_task(user, motivo="NOK")
+
         tipo = f"emprestado (origem {info['origem']})" if info["emprestado"] else "local"
         nivel = logger.info if status == "OK" else logger.warning
         nivel("Worker %s [%s] reportou %s na TASK %s (total: %d)",
               uuid_, tipo, status, msg.get("TASK"), info["concluidas"])
         await send_message(writer, {"STATUS": "ACK", "WORKER_UUID": uuid_})
+
+    # ── Tolerância a falhas de tarefa (reenfileiramento) ─────────
+
+    def _requeue_if_inflight(self, ctx) -> None:
+        """Worker caiu com tarefa em andamento -> devolve à fila.
+
+        Falha de infraestrutura (queda de conexão) NÃO consome tentativa: a tarefa
+        nunca chegou a ser processada por completo, então volta para nova entrega.
+        """
+        user = ctx.get("task") if ctx else None
+        if user is None:
+            return
+        ctx["task"] = None
+        self.in_flight.pop(ctx.get("uuid"), None)
+        self.tasks.appendleft(user)
+        self.set_load(len(self.tasks))
+        logger.warning("Worker %s caiu com TASK '%s' em andamento -> reenfileirada (fila=%d)",
+                       ctx.get("uuid"), user, len(self.tasks))
+
+    def _requeue_task(self, user, motivo="") -> None:
+        """Reenfileira por NOK respeitando o limite de tentativas (dead-letter ao exceder).
+
+        Obs.: as tentativas são contadas por nome de tarefa (USER); tarefas com nomes
+        idênticos compartilham o contador — suficiente para a simulação deste projeto.
+        """
+        attempts = self.task_attempts.get(user, 0) + 1
+        if attempts < self.max_task_attempts:
+            self.task_attempts[user] = attempts
+            self.tasks.appendleft(user)
+            self.set_load(len(self.tasks))
+            logger.warning("%s em '%s' (tentativa %d/%d) -> reenfileirada (fila=%d)",
+                           motivo, user, attempts, self.max_task_attempts, len(self.tasks))
+        else:
+            self.task_attempts.pop(user, None)
+            logger.error("'%s' excedeu %d tentativas (%s) -> descartada (dead-letter)",
+                         user, self.max_task_attempts, motivo)
 
     async def _handle_election_ack(self, msg, writer, addr) -> None:
         """Sprint 2.1: recebe confirmação de eleição do Worker e responde ACCEPTED."""
@@ -640,6 +716,7 @@ class Master:
                 print(f"  Workers locais   : {len(self.workers)}")
                 print(f"  Workers ociosos  : {len(self.idle_workers)} {self.idle_workers}")
                 print(f"  Workers recebidos: {len(self.borrowed_in)} {list(self.borrowed_in)}")
+                print(f"  Tarefas em andamento: {len(self.in_flight)} {self.in_flight}")
                 continue
             # Qualquer outra entrada é tratada como nome de tarefa
             self.tasks.append(cmd)
@@ -724,11 +801,13 @@ async def run_server(host: str = DEFAULT_HOST,
                      disc_port: Optional[int] = None,
                      neighbors: Optional[dict] = None,
                      capacity: int = DEFAULT_CAPACITY,
-                     release_threshold: int = DEFAULT_RELEASE_THRESHOLD) -> None:
+                     release_threshold: int = DEFAULT_RELEASE_THRESHOLD,
+                     max_task_attempts: int = DEFAULT_MAX_TASK_ATTEMPTS) -> None:
     """Cria e inicia o Master. Se disc_port for dado, sobe também o responder UDP."""
     m = Master(host, port, master_id, tasks=tasks, name=name,
                advertise_ip=advertise_ip, capacity=capacity,
-               release_threshold=release_threshold)
+               release_threshold=release_threshold,
+               max_task_attempts=max_task_attempts)
     if neighbors:
         m.neighbors.update(neighbors)
     _setup_auto_callbacks(m)
@@ -779,6 +858,8 @@ def main() -> None:
                         help=f"Threshold de saturação Sprint 3 (padrão: {DEFAULT_CAPACITY})")
     parser.add_argument("--release-threshold", type=int, default=DEFAULT_RELEASE_THRESHOLD,
                         help=f"Threshold de liberação Sprint 3 (padrão: {DEFAULT_RELEASE_THRESHOLD})")
+    parser.add_argument("--max-attempts", type=int, default=DEFAULT_MAX_TASK_ATTEMPTS,
+                        help=f"Tentativas por tarefa antes de descartar em NOK (padrão: {DEFAULT_MAX_TASK_ATTEMPTS})")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -802,6 +883,7 @@ def main() -> None:
             neighbors=vizinhos,
             capacity=args.capacity,
             release_threshold=args.release_threshold,
+            max_task_attempts=args.max_attempts,
         ))
     except KeyboardInterrupt:
         logger.info("Master interrompido pelo usuário")
